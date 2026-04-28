@@ -3,18 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Midnight Bed Battle</title>
+    <title>Midnight Bed Battle: Stick Figure Edition</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #333; color: white; font-family: sans-serif; }
-        canvas { display: block; background: #555; }
-        #ui { position: absolute; top: 10px; left: 10px; pointer-events: none; }
+        body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Courier New', Courier, monospace; }
+        canvas { display: block; }
+        #ui { position: absolute; top: 20px; width: 100%; text-align: center; color: white; pointer-events: none; text-shadow: 2px 2px #000; }
     </style>
 </head>
 <body>
     <div id="ui">
-        <h1>Midnight Bed Battle</h1>
-        <p>Use LEFT/RIGHT arrows to move. Avoid parents & lava!</p>
-        <p>Score: <span id="score">0</span></p>
+        <h1>DON'T GET SQUISHED!</h1>
+        <p>Use LEFT/RIGHT Arrows to stay on the bed.</p>
+        <h2>Score: <span id="score">0</span></h2>
     </div>
     <canvas id="gameCanvas"></canvas>
 
@@ -23,71 +23,79 @@
     const ctx = canvas.getContext('2d');
     const scoreEl = document.getElementById('score');
 
-    // Resize canvas
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    // Game Constants
-    const BED_WIDTH = 400;
-    const BED_HEIGHT = canvas.height;
+    const BED_WIDTH = 500;
     const BED_X = (canvas.width - BED_WIDTH) / 2;
-    const PLAYER_SIZE = 30;
-    const PARENT_WIDTH = 60;
-    const PARENT_HEIGHT = 100;
-    const LAVA_COLOR = '#ff4500';
-
     let score = 0;
     let gameActive = true;
 
-    // Game Objects
-    const player = {
-        x: canvas.width / 2,
-        y: canvas.height - 100,
-        size: PLAYER_SIZE,
-        speed: 5
-    };
-
-    const parentLeft = { x: BED_X - 10, y: 0, w: PARENT_WIDTH, h: PARENT_HEIGHT, speed: 2 };
-    const parentRight = { x: BED_X + BED_WIDTH - PARENT_WIDTH + 10, y: 0, w: PARENT_WIDTH, h: PARENT_HEIGHT, speed: 2 };
-
-    // Input Handling
     const keys = { ArrowLeft: false, ArrowRight: false };
     window.addEventListener('keydown', e => keys[e.key] = true);
     window.addEventListener('keyup', e => keys[e.key] = false);
 
+    const player = { x: canvas.width / 2, y: canvas.height * 0.7, speed: 6, width: 30 };
+    
+    // Parent logic: x is current position, targetX is where they want to roll to
+    const leftParent = { x: BED_X + 50, targetX: BED_X + 50, side: 'left' };
+    const rightParent = { x: BED_X + BED_WIDTH - 50, targetX: BED_X + BED_WIDTH - 50, side: 'right' };
+
+    function drawStickFigure(x, y, scale, isChild, color) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = isChild ? 3 : 5;
+        ctx.beginPath();
+
+        // Head
+        ctx.arc(x, y - (40 * scale), 15 * scale, 0, Math.PI * 2);
+        // Body
+        ctx.moveTo(x, y - (25 * scale));
+        ctx.lineTo(x, y + (10 * scale));
+        // Arms
+        ctx.moveTo(x - (20 * scale), y - (10 * scale));
+        ctx.lineTo(x + (20 * scale), y - (10 * scale));
+        // Legs
+        ctx.moveTo(x, y + (10 * scale));
+        ctx.lineTo(x - (15 * scale), y + (40 * scale));
+        ctx.moveTo(x, y + (10 * scale));
+        ctx.lineTo(x + (15 * scale), y + (40 * scale));
+        
+        ctx.stroke();
+    }
+
     function gameOver() {
         gameActive = false;
-        alert("Game Over! You fell in the lava! Score: " + Math.floor(score));
+        alert("You fell or got squished! Final Score: " + Math.floor(score));
         document.location.reload();
     }
 
     function update() {
         if (!gameActive) return;
 
-        // Move Player
+        // Player Movement
         if (keys.ArrowLeft) player.x -= player.speed;
         if (keys.ArrowRight) player.x += player.speed;
 
-        // Parents move randomly back and forth
-        parentLeft.x += (Math.random() - 0.5) * 5;
-        parentRight.x += (Math.random() - 0.5) * 5;
+        // Parent Rolling Logic
+        [leftParent, rightParent].forEach(p => {
+            if (Math.abs(p.x - p.targetX) < 5) {
+                // Pick a new spot to roll to every few seconds
+                let range = 120;
+                if (p.side === 'left') {
+                    p.targetX = BED_X + (Math.random() * range);
+                } else {
+                    p.targetX = (BED_X + BED_WIDTH) - (Math.random() * range);
+                }
+            }
+            // Move toward target
+            p.x += (p.targetX - p.x) * 0.02;
+        });
 
-        // Constrain Parents to bed edges
-        parentLeft.x = Math.max(BED_X - 50, Math.min(parentLeft.x, BED_X + 50));
-        parentRight.x = Math.max(BED_X + BED_WIDTH - 50, Math.min(parentRight.x, BED_X + BED_WIDTH + 10));
+        // Collision Checks
+        if (player.x < leftParent.x + 20 || player.x > rightParent.x - 20) gameOver(); // Squished
+        if (player.x < BED_X || player.x > BED_X + BED_WIDTH) gameOver(); // Lava
 
-        // Collision: Parent Squish
-        if (player.x < parentLeft.x + parentLeft.w || player.x + player.size > parentRight.x) {
-            gameOver();
-        }
-
-        // Collision: Bed Edges (Lava)
-        if (player.x < BED_X || player.x + player.size > BED_X + BED_WIDTH) {
-            gameOver();
-        }
-
-        // Update Score
-        score += 0.1;
+        score += 0.05;
         scoreEl.innerText = Math.floor(score);
 
         draw();
@@ -95,22 +103,30 @@
     }
 
     function draw() {
-        // Draw Lava Background
-        ctx.fillStyle = LAVA_COLOR;
+        // Lava
+        ctx.fillStyle = '#cc3300';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Bed
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(BED_X, 0, BED_WIDTH, canvas.height);
+        
+        // Bed Sheets pattern
+        ctx.strokeStyle = '#ddd';
+        ctx.lineWidth = 1;
+        for(let i = 0; i < canvas.height; i += 20) {
+            ctx.beginPath();
+            ctx.moveTo(BED_X, i);
+            ctx.lineTo(BED_X + BED_WIDTH, i);
+            ctx.stroke();
+        }
 
-        // Draw Bed
-        ctx.fillStyle = '#f0e68c';
-        ctx.fillRect(BED_X, 0, BED_WIDTH, BED_HEIGHT);
+        // Draw Parents (Large stick figures)
+        drawStickFigure(leftParent.x, canvas.height * 0.7, 1.2, false, '#444');
+        drawStickFigure(rightParent.x, canvas.height * 0.7, 1.2, false, '#444');
 
-        // Draw Parents
-        ctx.fillStyle = '#8b4513'; // Brown (Parents)
-        ctx.fillRect(parentLeft.x, parentLeft.y, parentLeft.w, parentLeft.h);
-        ctx.fillRect(parentRight.x, parentRight.y, parentRight.w, parentRight.h);
-
-        // Draw Player (Child)
-        ctx.fillStyle = '#32cd32'; // Green (Child)
-        ctx.fillRect(player.x, player.y, player.size, player.size);
+        // Draw Child (Small stick figure)
+        drawStickFigure(player.x, player.y, 0.6, true, '#000');
     }
 
     update();
